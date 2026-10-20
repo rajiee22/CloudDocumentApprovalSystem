@@ -1,0 +1,10 @@
+{
+  "description": "Streamlines university document approvals by enabling students to submit forms online and approvers to review, sign, and track requests efficiently.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}
