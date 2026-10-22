@@ -1,139 +1,9 @@
 import { FormEvent, ReactNode, useMemo, useState } from "react";
+import type { Role, Page, Status, SubjectRow, LoadRevisionPermit, RequestItem } from "@/types";
+import { defaultPermit, requestsSeed, approvalQueue } from "@/mocks/seed";
+import { isLoadRevision } from "@/lib/requestTypes";
+import { Icon, Button, StatusBadge, Logo, Field, Modal } from "@/components/ui";
 
-type Role = "student" | "approver";
-type Page =
-  | "login"
-  | "dashboard"
-  | "new"
-  | "form"
-  | "requests"
-  | "detail"
-  | "review"
-  | "signature"
-  | "notifications"
-  | "settings";
-type Status = "Pending" | "Approved" | "Rejected" | "Returned for Revision" | "Completed";
-
-type SubjectRow = {
-  course: string;
-  title: string;
-  units: string;
-  closed?: boolean;
-};
-
-type LoadRevisionPermit = {
-  term: "1st Semester" | "2nd Semester" | "Summer Term";
-  schoolYear: string;
-  familyName: string;
-  givenName: string;
-  middleName: string;
-  studentId: string;
-  permitDate: string;
-  college: string;
-  department: string;
-  courseYear: string;
-  withdraw: SubjectRow[];
-  add: SubjectRow[];
-  loadBeforeUnits: string;
-  loadBeforeHours: string;
-  loadAfterUnits: string;
-  loadAfterHours: string;
-  conflict: boolean;
-  dissolved: boolean;
-  otherReason: string;
-  studentSignature: string;
-  signatures: Record<string, string>;
-};
-
-type RequestItem = {
-  id: string;
-  type: string;
-  student: string;
-  date: string;
-  stage: string;
-  status: Status;
-  reason?: string;
-  permit?: LoadRevisionPermit;
-};
-
-const defaultPermit: LoadRevisionPermit = {
-  term: "2nd Semester",
-  schoolYear: "2024–2025",
-  familyName: "Santos",
-  givenName: "Andrea",
-  middleName: "M.",
-  studentId: "2021-1234",
-  permitDate: "2025-05-26",
-  college: "College of Computer Studies",
-  department: "Information Technology Department",
-  courseYear: "BS Information Technology – 4th Year",
-  withdraw: [{ course: "IT 138 – A", title: "Information Assurance and Security", units: "3" }],
-  add: [{ course: "IT 141 – B", title: "Systems Integration and Architecture", units: "3", closed: false }],
-  loadBeforeUnits: "18",
-  loadBeforeHours: "21",
-  loadAfterUnits: "18",
-  loadAfterHours: "21",
-  conflict: true,
-  dissolved: false,
-  otherReason: "",
-  studentSignature: "Andrea M. Santos",
-  signatures: { Adviser: "Prof. Ramon C. Flores" },
-};
-
-const isLoadRevision = (type: string) => type.includes("Load Revision");
-
-const requestsSeed: RequestItem[] = [
-  { id: "IIT-2025-1048", type: "Load Revision Form", student: "Andrea M. Santos", date: "May 22, 2025", stage: "College Dean", status: "Pending" },
-  { id: "IIT-2025-1031", type: "Leave of Absence Form", student: "Andrea M. Santos", date: "May 18, 2025", stage: "Final Approval", status: "Approved" },
-  { id: "IIT-2025-0987", type: "Shifter's Application Form", student: "Andrea M. Santos", date: "May 08, 2025", stage: "Student Revision", status: "Returned for Revision", reason: "Please attach a clearer statement explaining your intended program." },
-  { id: "IIT-2025-0912", type: "Load Revision Form", student: "Andrea M. Santos", date: "Apr 27, 2025", stage: "Completed", status: "Completed" },
-];
-
-const approvalQueue: RequestItem[] = [
-  { id: "IIT-2025-1056", type: "Leave of Absence Form", student: "Miguel A. Ramos", date: "May 24, 2025", stage: "Department Chair", status: "Pending" },
-  { id: "IIT-2025-1052", type: "Load Revision Form", student: "Patricia L. Cruz", date: "May 23, 2025", stage: "Department Chair", status: "Pending" },
-  { id: "IIT-2025-1048", type: "Load Revision Form", student: "Andrea M. Santos", date: "May 22, 2025", stage: "Department Chair", status: "Pending" },
-];
-
-const icons: Record<string, ReactNode> = {
-  grid: <><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></>,
-  plus: <><path d="M12 5v14M5 12h14"/></>,
-  file: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h5"/></>,
-  bell: <><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0"/></>,
-  user: <><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></>,
-  settings: <><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3A1.7 1.7 0 0 0 10 3V2.8h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1z"/></>,
-  check: <><path d="m5 12 4 4L19 6"/></>,
-  clock: <><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></>,
-  x: <><path d="m7 7 10 10M17 7 7 17"/></>,
-  rotate: <><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></>,
-  search: <><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></>,
-  chevron: <><path d="m9 18 6-6-6-6"/></>,
-  arrow: <><path d="m19 12-7-7M19 12l-7 7M19 12H5"/></>,
-  download: <><path d="M12 3v12M7 10l5 5 5-5M4 21h16"/></>,
-  pen: <><path d="m3 21 3.8-1 12-12a2.1 2.1 0 0 0-3-3l-12 12L3 21zM14 7l3 3"/></>,
-  logout: <><path d="M10 17l5-5-5-5M15 12H3M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/></>,
-  menu: <><path d="M4 7h16M4 12h16M4 17h16"/></>,
-  eye: <><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z"/><circle cx="12" cy="12" r="2.5"/></>,
-  mail: <><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></>,
-  upload: <><path d="M12 16V4M7 9l5-5 5 5M4 20h16"/></>,
-};
-
-function Icon({ name, size = 20 }: { name: string; size?: number }) {
-  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{icons[name]}</svg>;
-}
-
-function Button({ children, variant = "primary", icon, onClick, type = "button", disabled, className = "" }: { children: ReactNode; variant?: "primary" | "secondary" | "ghost" | "danger" | "success"; icon?: string; onClick?: () => void; type?: "button" | "submit"; disabled?: boolean; className?: string }) {
-  return <button className={`btn btn-${variant} ${className}`} onClick={onClick} type={type} disabled={disabled}>{icon && <Icon name={icon} size={17}/>}<span>{children}</span></button>;
-}
-
-function StatusBadge({ status }: { status: Status }) {
-  const icon = status === "Approved" || status === "Completed" ? "check" : status === "Rejected" ? "x" : status === "Returned for Revision" ? "rotate" : "clock";
-  return <span className={`status status-${status.toLowerCase().replaceAll(" ", "-")}`}><Icon name={icon} size={13}/>{status}</span>;
-}
-
-function Logo({ light = false }: { light?: boolean }) {
-  return <div className={`logo ${light ? "logo-light" : ""}`}><div className="seal"><span>MSU</span><b>IIT</b></div><div><strong>MSU–IIT</strong><small>Document Services</small></div></div>;
-}
 
 const studentNav = [
   ["dashboard", "grid", "Dashboard"],
@@ -251,10 +121,6 @@ function NewRequest({ select }: { select: (type: string) => void }) {
   return <><div className="intro"><span className="eyebrow">Start a request</span><h2>Which document do you need?</h2><p>Select a university form to begin. You can review all information before submitting.</p></div><div className="form-cards">{formTypes.map((f, i) => <article className="form-card" key={f.title}><div className={`form-illustration ${f.accent}`}><Icon name={i === 2 ? "clock" : i === 1 ? "rotate" : "file"} size={28}/><span>{String(i + 1).padStart(2, "0")}</span></div><small>{f.meta}</small><h3>{f.title}</h3><p>{f.desc}</p><Button variant="secondary" onClick={() => select(f.title)}>Start request <Icon name="arrow" size={16}/></Button></article>)}</div><div className="info-banner"><div><Icon name="check"/></div><p><strong>Your progress is protected.</strong><span>All submitted information is used only for university document processing. You can cancel before final submission.</span></p></div></>;
 }
 
-function Field({ label, required = false, children }: { label: string; required?: boolean; children: ReactNode }) {
-  return <label className="field"><span>{label}{required && <em>*</em>}</span>{children}</label>;
-}
-
 function SubjectEditor({ kind, rows, update }: { kind: "withdraw" | "add"; rows: SubjectRow[]; update: (rows: SubjectRow[]) => void }) {
   const change = (index: number, field: keyof SubjectRow, value: string | boolean) => update(rows.map((row, i) => i === index ? { ...row, [field]: value } : row));
   return <div className="subject-editor">
@@ -329,10 +195,6 @@ function GenericRequestForm({ type, cancel, submit }: { type: string; cancel: ()
     <div className="form-actions"><Button variant="secondary" onClick={cancel}>Cancel</Button><Button type="submit">Review and submit <Icon name="arrow" size={16}/></Button></div>
   </form>
   {confirm && <Modal title="Submit this request?" close={() => setConfirm(false)}><div className="confirm-icon"><Icon name="file"/></div><p>You're about to submit your <strong>{type}</strong>. The request will be routed to the first designated approver.</p><div className="modal-summary"><span>Student</span><strong>Andrea M. Santos</strong><span>Document</span><strong>{type}</strong></div><div className="modal-actions"><Button variant="secondary" onClick={() => setConfirm(false)}>Go back</Button><Button onClick={submit}>Confirm submission</Button></div></Modal>}</>;
-}
-
-function Modal({ title, children, close }: { title: string; children: ReactNode; close: () => void }) {
-  return <div className="modal-layer"><div className="modal"><button className="modal-close" onClick={close}><Icon name="x"/></button><h3>{title}</h3>{children}</div></div>;
 }
 
 function SubmissionSuccess({ request, done }: { request: RequestItem; done: () => void }) {
