@@ -1,8 +1,11 @@
-import { FormEvent, ReactNode, useMemo, useState } from "react";
+import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import type { Role, Page, Status, SubjectRow, LoadRevisionPermit, RequestItem } from "@/types";
 import { defaultPermit, requestsSeed, approvalQueue } from "@/mocks/seed";
 import { isLoadRevision } from "@/lib/requestTypes";
 import { Icon, Button, StatusBadge, Logo, Field, Modal } from "@/components/ui";
+import { ApiError } from "@/api/client";
+import { useAuth, useCurrentUser } from "@/context/AuthContext";
+import { greetingName, initials, stripTitle } from "@/lib/format";
 
 
 const studentNav = [
@@ -22,17 +25,19 @@ const approverNav = [
 ];
 
 function Sidebar({ role, page, navigate, open, close }: { role: Role; page: Page; navigate: (p: Page) => void; open: boolean; close: () => void }) {
+  const { logout } = useAuth();
   const nav = role === "student" ? studentNav : approverNav;
   return <aside className={`sidebar ${open ? "sidebar-open" : ""}`}>
     <div className="sidebar-head"><Logo light/><button className="mobile-close" onClick={close} aria-label="Close menu"><Icon name="x"/></button></div>
     <div className="role-label">{role === "student" ? "Student Portal" : "Approver Workspace"}</div>
     <nav>{nav.map(([target, icon, label], i) => <button key={`${label}-${i}`} className={(page === target && !(i === 2 && role === "approver")) ? "nav-active" : ""} onClick={() => { navigate(target as Page); close(); }}><Icon name={icon}/><span>{label}</span>{label === "Notifications" && <em>3</em>}</button>)}</nav>
     <div className="sidebar-support"><div className="support-icon">?</div><strong>Need help?</strong><p>Visit the service guide or contact ICTC support.</p><button>View support center <Icon name="arrow" size={14}/></button></div>
-    <button className="signout" onClick={() => navigate("login")}><Icon name="logout"/><span>Sign out</span></button>
+    <button className="signout" onClick={logout}><Icon name="logout"/><span>Sign out</span></button>
   </aside>;
 }
 
 function Shell({ children, role, page, navigate, title, subtitle }: { children: ReactNode; role: Role; page: Page; navigate: (p: Page) => void; title: string; subtitle: string }) {
+  const user = useCurrentUser();
   const [menu, setMenu] = useState(false);
   return <div className="app-shell">
     <Sidebar role={role} page={page} navigate={navigate} open={menu} close={() => setMenu(false)}/>
@@ -43,7 +48,7 @@ function Shell({ children, role, page, navigate, title, subtitle }: { children: 
         <div className="page-heading"><h1>{title}</h1><p>{subtitle}</p></div>
         <div className="top-actions">
           <button className="icon-btn" onClick={() => navigate("notifications")} aria-label="Notifications"><Icon name="bell"/><i/></button>
-          <div className="profile"><div className="avatar">{role === "student" ? "AS" : "EV"}</div><div><strong>{role === "student" ? "Andrea Santos" : "Dr. Elena Villanueva"}</strong><small>{role === "student" ? "BS Information Technology" : "Department Chair"}</small></div><Icon name="chevron" size={15}/></div>
+          <div className="profile"><div className="avatar">{initials(user.name)}</div><div><strong>{user.name}</strong><small>{user.role === "student" ? (user.department ?? "Student") : user.position}</small></div><Icon name="chevron" size={15}/></div>
         </div>
       </header>
       <div className="content">{children}</div>
@@ -51,15 +56,19 @@ function Shell({ children, role, page, navigate, title, subtitle }: { children: 
   </div>;
 }
 
-function Login({ onLogin }: { onLogin: (role: Role) => void }) {
+function Login() {
+  const { login } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [show, setShow] = useState(false);
-  const [error, setError] = useState(false);
-  function submit(e: FormEvent) {
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  async function submit(e: FormEvent) {
     e.preventDefault();
-    if (!email.endsWith("@g.msuiit.edu.ph") || !password) setError(true);
-    else onLogin(email.includes("approver") ? "approver" : "student");
+    if (!email.trim() || !password) { setError("Enter your university email and password."); return; }
+    setBusy(true); setError("");
+    try { await login(email.trim(), password); }   // on success App re-renders and this screen goes away
+    catch (err) { setError(err instanceof ApiError ? err.message : "Something went wrong. Please try again."); setBusy(false); }
   }
   return <div className="login-page">
     <section className="login-story">
@@ -73,14 +82,16 @@ function Login({ onLogin }: { onLogin: (role: Role) => void }) {
         <h2>Sign in to your account</h2><p className="muted">Use your official MSU-IIT university credentials.</p>
         <form onSubmit={submit}>
           <label>University email</label>
-          <div className={`field-icon ${error ? "field-error" : ""}`}><Icon name="mail" size={18}/><input type="email" value={email} onChange={e => {setEmail(e.target.value); setError(false)}} placeholder="name@g.msuiit.edu.ph"/></div>
-          {error && <div className="error-text">Enter a valid MSU-IIT email and password.</div>}
+          <div className={`field-icon ${error ? "field-error" : ""}`}><Icon name="mail" size={18}/><input type="email" value={email} onChange={e => {setEmail(e.target.value); setError("")}} placeholder="name@g.msuiit.edu.ph"/></div>
+          {error && <div className="error-text">{error}</div>}
           <div className="label-row"><label>Password</label><button type="button">Forgot password?</button></div>
           <div className="field-icon"><Icon name="user" size={18}/><input type={show ? "text" : "password"} value={password} onChange={e => setPassword(e.target.value)} placeholder="Enter your password"/><button type="button" className="show-pass" onClick={() => setShow(!show)}><Icon name="eye" size={18}/></button></div>
-          <Button type="submit" className="full">Sign in <Icon name="arrow" size={17}/></Button>
+          <Button type="submit" className="full" disabled={busy}>{busy ? "Signing in…" : <>Sign in <Icon name="arrow" size={17}/></>}</Button>
         </form>
-        <div className="divider"><span>Prototype access</span></div>
-        <div className="demo-buttons"><Button variant="secondary" onClick={() => onLogin("student")}><Icon name="user" size={17}/> Preview Student</Button><Button variant="secondary" onClick={() => onLogin("approver")}><Icon name="file" size={17}/> Preview Approver</Button></div>
+        {import.meta.env.DEV && <>
+          <div className="divider"><span>Demo accounts (dev only)</span></div>
+          <div className="demo-buttons"><Button variant="secondary" onClick={() => {setEmail("andrea.santos@g.msuiit.edu.ph"); setPassword("password123"); setError("")}}><Icon name="user" size={17}/> Fill Student</Button><Button variant="secondary" onClick={() => {setEmail("maria.reyes@msuiit.edu.ph"); setPassword("password123"); setError("")}}><Icon name="file" size={17}/> Fill Approver</Button></div>
+        </>}
         <p className="privacy">By signing in, you agree to the university's acceptable use and data privacy policies.</p>
       </div>
     </section>
@@ -97,8 +108,9 @@ function RequestTable({ data, onOpen, approver = false }: { data: RequestItem[];
 }
 
 function StudentDashboard({ navigate, open }: { navigate: (p: Page) => void; open: (r: RequestItem) => void }) {
+  const user = useCurrentUser();
   return <>
-    <div className="welcome-row"><div><span className="eyebrow">Monday, May 26</span><h2>Good morning, Andrea.</h2><p>You have one document currently waiting for approval.</p></div><Button icon="plus" onClick={() => navigate("new")}>New document request</Button></div>
+    <div className="welcome-row"><div><span className="eyebrow">Monday, May 26</span><h2>Good morning, {greetingName(user)}.</h2><p>You have one document currently waiting for approval.</p></div><Button icon="plus" onClick={() => navigate("new")}>New document request</Button></div>
     <div className="stats-grid"><StatCard label="Total requests" value={12} icon="file" tone="tone-maroon" trend="+2 this semester"/><StatCard label="Pending" value={3} icon="clock" tone="tone-amber"/><StatCard label="Approved" value={7} icon="check" tone="tone-green"/><StatCard label="Returned / Rejected" value={2} icon="rotate" tone="tone-red"/></div>
     <div className="dashboard-grid">
       <section className="card table-card"><div className="card-head"><div><h3>Recent document requests</h3><p>Your latest submissions and their current progress.</p></div><Button variant="ghost" onClick={() => navigate("requests")}>View all <Icon name="arrow" size={15}/></Button></div><RequestTable data={requestsSeed.slice(0, 4)} onOpen={open}/></section>
@@ -180,13 +192,14 @@ function RequestForm({ type, cancel, submit }: { type: string; cancel: () => voi
 }
 
 function GenericRequestForm({ type, cancel, submit }: { type: string; cancel: () => void; submit: () => void }) {
+  const user = useCurrentUser();
   const [reason, setReason] = useState("");
   const [confirm, setConfirm] = useState(false);
   const [error, setError] = useState(false);
   function validate(e: FormEvent) { e.preventDefault(); if (!reason.trim()) setError(true); else setConfirm(true); }
   return <><div className="form-page-head"><button className="back-link" onClick={cancel}>← Back to forms</button><span>New request</span><h2>{type}</h2><p>Complete the required information below. Fields marked with * are required.</p></div>
   <form className="request-form" onSubmit={validate}>
-    <section className="form-section"><div className="section-number">1</div><div className="section-body"><div className="section-title"><h3>Student information</h3><p>Confirm your university and academic details.</p></div><div className="form-grid"><Field label="Student ID" required><input defaultValue="2021-1234"/></Field><Field label="Full name" required><input defaultValue="Andrea M. Santos"/></Field><Field label="Program / Course" required><select defaultValue="BSIT"><option value="BSIT">BS Information Technology</option><option>BS Computer Science</option></select></Field><Field label="Year level" required><select defaultValue="4"><option value="4">4th Year</option><option>3rd Year</option></select></Field></div></div></section>
+    <section className="form-section"><div className="section-number">1</div><div className="section-body"><div className="section-title"><h3>Student information</h3><p>Confirm your university and academic details.</p></div><div className="form-grid"><Field label="Student ID" required><input defaultValue={user.studentNo ?? ""}/></Field><Field label="Full name" required><input defaultValue={user.name}/></Field><Field label="Program / Course" required><select defaultValue="BSIT"><option value="BSIT">BS Information Technology</option><option>BS Computer Science</option></select></Field><Field label="Year level" required><select defaultValue="4"><option value="4">4th Year</option><option>3rd Year</option></select></Field></div></div></section>
     <section className="form-section"><div className="section-number">2</div><div className="section-body"><div className="section-title"><h3>{type === "Load Revision Form" ? "Academic and subject details" : type === "Shifter's Application Form" ? "Program information" : "Academic information"}</h3><p>Provide the details relevant to this request.</p></div><div className="form-grid">
       {type === "Shifter's Application Form" && <><Field label="Current program" required><input defaultValue="BS Information Technology"/></Field><Field label="Intended program" required><input placeholder="Select intended program"/></Field></>}
       {type === "Leave of Absence Form" && <><Field label="Current academic year" required><input defaultValue="2024–2025"/></Field><Field label="Semester" required><select><option>Second semester</option><option>First semester</option></select></Field></>}
@@ -194,7 +207,7 @@ function GenericRequestForm({ type, cancel, submit }: { type: string; cancel: ()
     <section className="form-section"><div className="section-number">3</div><div className="section-body"><div className="section-title"><h3>Reason for request</h3><p>{type === "Shifter's Application Form" ? "Explain your reason for enrolling in the present course and for shifting." : "Briefly explain the circumstances for this request."}</p></div><Field label={type === "Leave of Absence Form" ? "Reason for leave of absence" : type === "Shifter's Application Form" ? "Reason for shifting or transferring" : "Reason for adding or withdrawing"} required><textarea value={reason} onChange={e => {setReason(e.target.value);setError(false)}} placeholder="Provide a clear explanation to help approvers review your request…" rows={5}/>{error && <span className="error-text">Please provide a reason before continuing.</span>}</Field></div></section>
     <div className="form-actions"><Button variant="secondary" onClick={cancel}>Cancel</Button><Button type="submit">Review and submit <Icon name="arrow" size={16}/></Button></div>
   </form>
-  {confirm && <Modal title="Submit this request?" close={() => setConfirm(false)}><div className="confirm-icon"><Icon name="file"/></div><p>You're about to submit your <strong>{type}</strong>. The request will be routed to the first designated approver.</p><div className="modal-summary"><span>Student</span><strong>Andrea M. Santos</strong><span>Document</span><strong>{type}</strong></div><div className="modal-actions"><Button variant="secondary" onClick={() => setConfirm(false)}>Go back</Button><Button onClick={submit}>Confirm submission</Button></div></Modal>}</>;
+  {confirm && <Modal title="Submit this request?" close={() => setConfirm(false)}><div className="confirm-icon"><Icon name="file"/></div><p>You're about to submit your <strong>{type}</strong>. The request will be routed to the first designated approver.</p><div className="modal-summary"><span>Student</span><strong>{user.name}</strong><span>Document</span><strong>{type}</strong></div><div className="modal-actions"><Button variant="secondary" onClick={() => setConfirm(false)}>Go back</Button><Button onClick={submit}>Confirm submission</Button></div></Modal>}</>;
 }
 
 function SubmissionSuccess({ request, done }: { request: RequestItem; done: () => void }) {
@@ -229,8 +242,9 @@ function PermitProgress({ permit }: { permit: LoadRevisionPermit }) {
 function Info({ label, value }: { label: string; value: string }) { return <div><span>{label}</span><strong>{value}</strong></div>; }
 
 function ApproverDashboard({ navigate, open, queue }: { navigate: (p: Page) => void; open: (r: RequestItem) => void; queue: RequestItem[] }) {
+  const user = useCurrentUser();
   const pending = queue.filter(r => r.status === "Pending");
-  return <><div className="welcome-row"><div><span className="eyebrow">Approver workspace</span><h2>Good morning, Dr. Villanueva.</h2><p>{pending.length} documents are waiting for your review.</p></div><Button variant="secondary" onClick={() => navigate("requests")}>View approval queue</Button></div><div className="stats-grid"><StatCard label="Pending approvals" value={pending.length} icon="clock" tone="tone-amber" trend="1 due today"/><StatCard label="Approved documents" value={28 + queue.filter(r => r.status === "Approved").length} icon="check" tone="tone-green" trend="+8 this month"/><StatCard label="Rejected documents" value={2} icon="x" tone="tone-red"/><StatCard label="Returned for revision" value={4} icon="rotate" tone="tone-blue"/></div><section className="card table-card"><div className="card-head"><div><h3>Requests awaiting action</h3><p>Prioritized by submission date and routing order.</p></div><Button variant="ghost" onClick={() => navigate("requests")}>View full queue <Icon name="arrow" size={15}/></Button></div><RequestTable data={pending} onOpen={open} approver/></section><div className="approver-foot"><div className="card quick-card"><div className="stat-icon tone-maroon"><Icon name="pen"/></div><div><h3>Your e-signature is ready</h3><p>Last updated April 12, 2025. It will only be applied after your approval confirmation.</p></div><Button variant="secondary" onClick={() => navigate("signature")}>Manage signature</Button></div><div className="card reminder"><Icon name="clock"/><div><strong>Average review time</strong><span>1.4 business days</span></div></div></div></>;
+  return <><div className="welcome-row"><div><span className="eyebrow">Approver workspace</span><h2>Good morning, {greetingName(user)}.</h2><p>{pending.length} documents are waiting for your review.</p></div><Button variant="secondary" onClick={() => navigate("requests")}>View approval queue</Button></div><div className="stats-grid"><StatCard label="Pending approvals" value={pending.length} icon="clock" tone="tone-amber" trend="1 due today"/><StatCard label="Approved documents" value={28 + queue.filter(r => r.status === "Approved").length} icon="check" tone="tone-green" trend="+8 this month"/><StatCard label="Rejected documents" value={2} icon="x" tone="tone-red"/><StatCard label="Returned for revision" value={4} icon="rotate" tone="tone-blue"/></div><section className="card table-card"><div className="card-head"><div><h3>Requests awaiting action</h3><p>Prioritized by submission date and routing order.</p></div><Button variant="ghost" onClick={() => navigate("requests")}>View full queue <Icon name="arrow" size={15}/></Button></div><RequestTable data={pending} onOpen={open} approver/></section><div className="approver-foot"><div className="card quick-card"><div className="stat-icon tone-maroon"><Icon name="pen"/></div><div><h3>Your e-signature is ready</h3><p>Last updated April 12, 2025. It will only be applied after your approval confirmation.</p></div><Button variant="secondary" onClick={() => navigate("signature")}>Manage signature</Button></div><div className="card reminder"><Icon name="clock"/><div><strong>Average review time</strong><span>1.4 business days</span></div></div></div></>;
 }
 
 function GenericReviewPage({ request, finish, back }: { request: RequestItem; finish: (action: Status, reason?: string) => void; back: () => void }) {
@@ -292,8 +306,9 @@ function ReviewPage({ request, finish, back }: { request: RequestItem; finish: (
 }
 
 function SignaturePage() {
+  const user = useCurrentUser();
   const [saved, setSaved] = useState(true); const [tab, setTab] = useState<"draw" | "upload">("draw"); const [confirm, setConfirm] = useState(false);
-  return <div className="signature-layout"><section className="card signature-main"><div className="card-head"><div><h3>Create your e-signature</h3><p>Draw a signature or upload a transparent image file.</p></div></div><div className="signature-tabs"><button className={tab === "draw" ? "active" : ""} onClick={() => setTab("draw")}><Icon name="pen" size={17}/> Draw signature</button><button className={tab === "upload" ? "active" : ""} onClick={() => setTab("upload")}><Icon name="upload" size={17}/> Upload image</button></div>{tab === "draw" ? <div className="signature-pad"><span className="script-signature">Elena Villanueva</span><div className="pad-line"/><small>Draw your signature above using your mouse or touch screen</small><button>Clear</button></div> : <label className="upload-zone"><Icon name="upload" size={30}/><strong>Drop your signature image here</strong><span>or click to browse · PNG or JPG up to 2 MB</span><input type="file" accept="image/*"/></label>}<div className="signature-actions"><Button variant="secondary">Reset</Button><Button onClick={() => setConfirm(true)}>Save signature</Button></div></section><aside className="card signature-preview"><span className="eyebrow">Current signature</span><div className="preview-sign">{saved ? <span className="script-signature">Elena Villanueva</span> : <em>No signature saved</em>}</div><div className="signature-status"><i/><div><strong>{saved ? "Signature ready" : "No saved signature"}</strong><span>{saved ? "Last updated April 12, 2025" : "Create one to approve documents"}</span></div></div>{saved && <Button variant="danger" className="full" onClick={() => setSaved(false)}>Remove signature</Button>}<div className="legal-note"><Icon name="check" size={18}/><p>This prototype signature is stored only within this interface and is not a legally verified or cryptographic digital signature.</p></div></aside>{confirm && <Modal title={saved ? "Replace saved signature?" : "Save this signature?"} close={() => setConfirm(false)}><p>This signature will be used in the prototype when you confirm document approvals.</p><div className="modal-actions"><Button variant="secondary" onClick={() => setConfirm(false)}>Cancel</Button><Button onClick={() => {setSaved(true);setConfirm(false)}}>{saved ? "Replace signature" : "Save signature"}</Button></div></Modal>}</div>;
+  return <div className="signature-layout"><section className="card signature-main"><div className="card-head"><div><h3>Create your e-signature</h3><p>Draw a signature or upload a transparent image file.</p></div></div><div className="signature-tabs"><button className={tab === "draw" ? "active" : ""} onClick={() => setTab("draw")}><Icon name="pen" size={17}/> Draw signature</button><button className={tab === "upload" ? "active" : ""} onClick={() => setTab("upload")}><Icon name="upload" size={17}/> Upload image</button></div>{tab === "draw" ? <div className="signature-pad"><span className="script-signature">{stripTitle(user.name)}</span><div className="pad-line"/><small>Draw your signature above using your mouse or touch screen</small><button>Clear</button></div> : <label className="upload-zone"><Icon name="upload" size={30}/><strong>Drop your signature image here</strong><span>or click to browse · PNG or JPG up to 2 MB</span><input type="file" accept="image/*"/></label>}<div className="signature-actions"><Button variant="secondary">Reset</Button><Button onClick={() => setConfirm(true)}>Save signature</Button></div></section><aside className="card signature-preview"><span className="eyebrow">Current signature</span><div className="preview-sign">{saved ? <span className="script-signature">{stripTitle(user.name)}</span> : <em>No signature saved</em>}</div><div className="signature-status"><i/><div><strong>{saved ? "Signature ready" : "No saved signature"}</strong><span>{saved ? "Last updated April 12, 2025" : "Create one to approve documents"}</span></div></div>{saved && <Button variant="danger" className="full" onClick={() => setSaved(false)}>Remove signature</Button>}<div className="legal-note"><Icon name="check" size={18}/><p>This prototype signature is stored only within this interface and is not a legally verified or cryptographic digital signature.</p></div></aside>{confirm && <Modal title={saved ? "Replace saved signature?" : "Save this signature?"} close={() => setConfirm(false)}><p>This signature will be used in the prototype when you confirm document approvals.</p><div className="modal-actions"><Button variant="secondary" onClick={() => setConfirm(false)}>Cancel</Button><Button onClick={() => {setSaved(true);setConfirm(false)}}>{saved ? "Replace signature" : "Save signature"}</Button></div></Modal>}</div>;
 }
 
 function Notifications({ role }: { role: Role }) {
@@ -311,14 +326,16 @@ function Notifications({ role }: { role: Role }) {
 }
 
 export default function App() {
-  const [page, setPage] = useState<Page>("login");
-  const [role, setRole] = useState<Role>("student");
+  const { user, loading } = useAuth();
+  const role: Role = user?.role ?? "student";
+  const [page, setPage] = useState<Page>("dashboard");
+  // A different person signing in always starts on the dashboard
+  useEffect(() => { setPage("dashboard"); }, [user?.id]);
   const [selectedType, setSelectedType] = useState("Load Revision Form");
   const [selectedRequest, setSelectedRequest] = useState<RequestItem>(requestsSeed[0]);
   const [requests, setRequests] = useState<RequestItem[]>(requestsSeed);
   const [queue, setQueue] = useState<RequestItem[]>(approvalQueue);
   const [submitted, setSubmitted] = useState<RequestItem | null>(null);
-  const login = (r: Role) => { setRole(r); setPage("dashboard"); };
   const open = (r: RequestItem) => { setSelectedRequest(r); setPage(role === "approver" ? "detail" : "detail"); };
   const submitRequest = (permit?: LoadRevisionPermit) => {
     const nextReference =
@@ -330,7 +347,7 @@ export default function App() {
     const r = {
       id: `IIT-2025-${nextReference}`,
       type: selectedType,
-      student: permit ? `${permit.givenName} ${permit.middleName} ${permit.familyName}`.replace(/\s+/g, " ").trim() : "Andrea M. Santos",
+      student: permit ? `${permit.givenName} ${permit.middleName} ${permit.familyName}`.replace(/\s+/g, " ").trim() : (user?.name ?? ""),
       date: "May 26, 2025",
       stage: "Program Adviser",
       status: "Pending" as Status,
@@ -351,7 +368,8 @@ export default function App() {
     setQueue(queue.map(r => r.id === selectedRequest.id ? updated : r));
     setPage("detail");
   };
-  if (page === "login") return <Login onLogin={login}/>;
+  if (loading) return <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", color: "#68717d" }}>Loading…</div>;
+  if (!user) return <Login/>;
   if (submitted) return <Shell role={role} page="requests" navigate={p => {setSubmitted(null);setPage(p)}} title="Request submitted" subtitle="Your document has entered the approval workflow."><SubmissionSuccess request={submitted} done={() => {setSelectedRequest(submitted);setSubmitted(null);setPage("detail")}}/></Shell>;
   let title = "Dashboard", subtitle = role === "student" ? "An overview of your university document requests." : "Review and manage documents assigned to you.";
   if (page === "new") { title = "New document request"; subtitle = "Choose a form to begin your submission."; }
@@ -371,6 +389,6 @@ export default function App() {
     {page === "review" && <ReviewPage request={selectedRequest} finish={finishReview} back={() => setPage("detail")}/>}
     {page === "signature" && <SignaturePage/>}
     {page === "notifications" && <Notifications role={role}/>}
-    {page === "settings" && <section className="card settings-placeholder"><div className="avatar large">{role === "student" ? "AS" : "EV"}</div><h2>{role === "student" ? "Andrea M. Santos" : "Dr. Elena Villanueva"}</h2><p>{role === "student" ? "andrea.santos@g.msuiit.edu.ph" : "elena.villanueva@msuiit.edu.ph"}</p><div className="info-grid"><Info label="University affiliation" value="MSU–IIT"/><Info label="Account role" value={role === "student" ? "Student" : "Authorized Approver"}/><Info label="Notification preference" value="Email and in-app"/><Info label="Account status" value="Active"/></div></section>}
+    {page === "settings" && <section className="card settings-placeholder"><div className="avatar large">{initials(user.name)}</div><h2>{user.name}</h2><p>{user.email}</p><div className="info-grid"><Info label="University affiliation" value="MSU–IIT"/><Info label="Account role" value={role === "student" ? "Student" : `Approver · ${user.position}`}/><Info label="Notification preference" value="Email and in-app"/><Info label="Account status" value="Active"/></div></section>}
   </Shell>;
 }

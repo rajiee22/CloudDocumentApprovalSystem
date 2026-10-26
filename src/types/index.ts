@@ -54,3 +54,17 @@ export type RequestItem = {
   reason?: string;
   permit?: LoadRevisionPermit;
 };
+
+export type Position = "Adviser" | "Chairperson" | "College Dean";
+
+/** The signed-in user, as returned by the API (never includes the password). */
+export type User = {
+  id: string;
+  name: string;
+  email: string;
+  role: Role;
+  position: Position | null;
+  studentNo: string | null;
+  college: string | null;
+  department: string | null;
+};

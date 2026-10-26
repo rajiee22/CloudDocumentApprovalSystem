@@ -1,7 +1,9 @@
 import cors from "cors";
-import express, { type ErrorRequestHandler } from "express";
+import express from "express";
 import { env } from "./config/env";
 import { pool } from "./lib/db";
+import { errorHandler } from "./middleware/errorHandler";
+import { authRouter } from "./modules/auth/auth.routes";
 
 export function createApp() {
   const app = express();
@@ -18,16 +20,12 @@ export function createApp() {
     }
   });
 
-  // Feature routers get mounted here as they are built, e.g.
-  //   app.use("/api/auth", authRouter);
+  app.use("/api/auth", authRouter);
+  // More routers get mounted here as they are built, e.g.
   //   app.use("/api/requests", requestsRouter);
 
   app.use("/api", (_req, res) => { res.status(404).json({ error: "Not found" }); });
 
-  const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
-    console.error(err);
-    res.status(500).json({ error: "Internal server error" });
-  };
   app.use(errorHandler);
 
   return app;
