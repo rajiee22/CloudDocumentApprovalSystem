@@ -1,6 +1,6 @@
 # File Tree: CloudDocumentApprovalSystem
 
-**Generated:** 11/25/2026, 4:17:08 PM
+**Generated:** 11/26/2026, 4:18:10 PM
 **Root Path:** `c:\Users\HP\Desktop\CloudDocumentApprovalSystem`
 
 ```
@@ -16,6 +16,9 @@
 │       ├── 📄 langserver
 │       └── ⚙️ site.json
 ├── 📁 backend
+│   ├── 📁 secure-storage
+│   │   └── 📁 signatures
+│   │       └── 📄 5938c08e519a403002099b5c59adfcec.dat
 │   ├── 📁 src
 │   │   ├── 📁 config
 │   │   │   └── 📄 database.ts
@@ -23,21 +26,25 @@
 │   │   │   ├── 📄 auth.controller.ts
 │   │   │   ├── 📄 dashboard.controller.ts
 │   │   │   ├── 📄 notification.controller.ts
-│   │   │   └── 📄 request.controller.ts
+│   │   │   ├── 📄 request.controller.ts
+│   │   │   └── 📄 signature.controller.ts
 │   │   ├── 📁 middleware
 │   │   │   └── 📄 auth.middleware.ts
 │   │   ├── 📁 routes
 │   │   │   ├── 📄 auth.routes.ts
 │   │   │   ├── 📄 dashboard.routes.ts
 │   │   │   ├── 📄 notification.routes.ts
-│   │   │   └── 📄 request.routes.ts
+│   │   │   ├── 📄 request.routes.ts
+│   │   │   └── 📄 signature.routes.ts
 │   │   ├── 📁 scripts
 │   │   │   └── 📄 create-admin.ts
 │   │   ├── 📁 services
 │   │   │   ├── 📄 auth.service.ts
 │   │   │   ├── 📄 dashboard.service.ts
 │   │   │   ├── 📄 notification.service.ts
-│   │   │   └── 📄 request.service.ts
+│   │   │   ├── 📄 request.service.ts
+│   │   │   ├── 📄 signature-storage.service.ts
+│   │   │   └── 📄 signature.service.ts
 │   │   ├── 📁 services.old.request.ts
 │   │   │   └── 📄 request.service.ts
 │   │   ├── 📁 types
@@ -56,9 +63,8 @@
 │   ├── 📁 migrations
 │   │   ├── 📄 002_update_shifter_and_leave_details.sql
 │   │   └── 📄 003_create_notifications.sql
-│   ├── 📁 seeds
-│   │   └── 📄 demo_profiles.sql
-│   └── 📄 schema-inspection.sql
+│   └── 📁 seeds
+│       └── 📄 demo_profiles.sql
 ├── 📁 diagrams
 │   ├── 🖼️ 01-Use-Case-Diagram.png
 │   ├── 🖼️ 02-ERD-Detailed.png
@@ -85,7 +91,8 @@
 │   │   ├── 📄 auth.ts
 │   │   ├── 📄 dashboard.ts
 │   │   ├── 📄 notifications.ts
-│   │   └── 📄 requests.ts
+│   │   ├── 📄 requests.ts
+│   │   └── 📄 signatures.ts
 │   ├── 📁 pages
 │   │   ├── 📁 account
 │   │   │   └── 📄 AccountPages.tsx
